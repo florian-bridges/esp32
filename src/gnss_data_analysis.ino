@@ -1,6 +1,10 @@
 #define RXD2 13
 #define TXD2 2
 
+
+const char * GNRMC_MESSAGE_HEADER = "$GNRMC,"; // current implementation needs comma to be included into header
+
+// $GNRMC (Minimum GNSS Data)
 struct {
   char gnss_data_[80];
   bool GetData_Flag;    // Get GNSS data flag bit
@@ -10,6 +14,8 @@ struct {
   char N_S[2];          // N/S
   char longitude[12];   // Longitude
   char E_W[2];          // E/W
+  char speed_over_ground[5];
+  char course_over_ground[7];
   bool Usefull_Flag;    // If the position information is valid flag bit
 } parsed_gnss_data;
 
@@ -30,7 +36,7 @@ void setup() {
 }
 
 void loop() {
-  read_raw_gnss_data_();  // Get GNSS data
+  read_raw_gnss_data_(GNRMC_MESSAGE_HEADER);  // Get GNSS data
   parse_gnss_data_();  // Analyze GNSS data
   print_gnss_data();  // Output analyzed data
 }
@@ -47,12 +53,16 @@ void error_flag(int num) {
 }
 
 void print_gnss_data() {
+
   if (parsed_gnss_data.ParseData_Flag) {
     parsed_gnss_data.ParseData_Flag = false;
 
+    Serial.println("************************");
+    Serial.println(parsed_gnss_data.gnss_data_);
+
+    
     Serial.print("parsed_gnss_data.UTCTime = ");
     Serial.println(parsed_gnss_data.UTCTime);
-
     if (parsed_gnss_data.Usefull_Flag) {
       parsed_gnss_data.Usefull_Flag = false;
       Serial.print("parsed_gnss_data.latitude = ");
@@ -63,6 +73,10 @@ void print_gnss_data() {
       Serial.println(parsed_gnss_data.longitude);
       Serial.print("parsed_gnss_data.E_W = ");
       Serial.println(parsed_gnss_data.E_W);
+      Serial.print("parsed_gnss_data.speed_over_ground = ");
+      Serial.println(parsed_gnss_data.speed_over_ground);
+      Serial.print("parsed_gnss_data.course_over_ground = ");
+      Serial.println(parsed_gnss_data.course_over_ground);
     } else {
       Serial.println("GNSS DATA is not usefull!");
     }
@@ -77,10 +91,8 @@ void parse_gnss_data_() {
   }
 
   parsed_gnss_data.GetData_Flag = false;
-  Serial.println("************************");
-  Serial.println(parsed_gnss_data.gnss_data_);
 
-  for (int i = 0; i <= 6; i++) {
+  for (int i = 0; i <= 8; i++) {
     if (i == 0) {
       if ((subString = strstr(parsed_gnss_data.gnss_data_, ",")) == NULL){
         error_flag(1);  // Analysis error
@@ -114,6 +126,12 @@ void parse_gnss_data_() {
       case 6:
         memcpy(parsed_gnss_data.E_W, subString, subStringNext - subString);
         break;  // Get E/W
+      case 7:
+        memcpy(parsed_gnss_data.speed_over_ground, subString, subStringNext - subString);
+        break;  // Get speed over ground
+      case 8:
+        memcpy(parsed_gnss_data.course_over_ground, subString, subStringNext - subString);
+        break;  // Get course over ground
 
       default:
         break;
@@ -128,7 +146,7 @@ void parse_gnss_data_() {
 }
 
 
-void read_raw_gnss_data_() 
+void read_raw_gnss_data_(const char * message_header) 
 {
   while (Serial2.available())
   {
@@ -139,7 +157,7 @@ void read_raw_gnss_data_()
   char* gnss_data_head;
   char* gnss_data_tail;
 
-  if ((gnss_data_head = strstr(rx_buffer, "$GNRMC,")) == NULL ) return;
+  if ((gnss_data_head = strstr(rx_buffer, message_header)) == NULL ) return;
   if (((gnss_data_tail = strstr(gnss_data_head, "\r\n")) == NULL) || (gnss_data_tail <= gnss_data_head)) return;
 
   memcpy(parsed_gnss_data.gnss_data_, gnss_data_head, gnss_data_tail - gnss_data_head);
